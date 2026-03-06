@@ -1,39 +1,70 @@
 import runpod
-import subprocess
 import base64
 import tempfile
 import os
+import subprocess
+
+def save_base64_image(base64_string, path):
+    if "," in base64_string:
+        base64_string = base64_string.split(",")[1]
+
+    image_bytes = base64.b64decode(base64_string)
+
+    with open(path, "wb") as f:
+        f.write(image_bytes)
+
+
+def encode_image(path):
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode("utf-8")
+
 
 def handler(event):
+
     input_data = event["input"]
 
-    user_image = input_data["user_image"]
-    ref_image = input_data["ref_image"]
+    # test endpoint
+    if "ping" in input_data:
+        return {"status": "server working"}
 
-    user_bytes = base64.b64decode(user_image)
-    ref_bytes = base64.b64decode(ref_image)
+    user_image = input_data.get("image_user")
+    ref_image = input_data.get("image_ref")
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as f1:
-        f1.write(user_bytes)
-        user_path = f1.name
+    if user_image is None or ref_image is None:
+        return {"error": "image_user and image_ref required"}
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as f2:
-        f2.write(ref_bytes)
-        ref_path = f2.name
+    with tempfile.TemporaryDirectory() as tmp:
 
-    output_path = "/workspace/output.png"
+        user_path = os.path.join(tmp, "user.png")
+        ref_path = os.path.join(tmp, "hair.png")
+        output_path = os.path.join(tmp, "result.png")
 
-    subprocess.run([
-        "python",
-        "infer_full.py",
-        "--source", user_path,
-        "--reference", ref_path,
-        "--output", output_path
-    ])
+        save_base64_image(user_image, user_path)
+        save_base64_image(ref_image, ref_path)
 
-    with open(output_path, "rb") as f:
-        result = base64.b64encode(f.read()).decode()
+        try:
 
-    return {"image": result}
+            command = [
+                "python",
+                "scripts/inference.py",
+                "--input_face", user_path,
+                "--input_hair", ref_path,
+                "--output", output_path
+            ]
+
+            subprocess.run(command, check=True)
+
+        except Exception as e:
+            return {"error": str(e)}
+
+        if not os.path.exists(output_path):
+            return {"error": "model did not generate output"}
+
+        result_base64 = encode_image(output_path)
+
+        return {
+            "image": result_base64
+        }
+
 
 runpod.serverless.start({"handler": handler})
