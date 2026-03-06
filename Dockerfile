@@ -1,15 +1,8 @@
-FROM runpod/pytorch:2.0.1-py3.10-cuda11.8.0
+FROM pytorch/pytorch:2.0.1-cuda11.7-cudnn8-runtime
 
 WORKDIR /workspace
 
-RUN git clone https://github.com/Xiaojiu-z/Stable-Hair.git
-
-WORKDIR /workspace/Stable-Hair
-
-RUN pip install torch torchvision
-RUN pip install diffusers transformers accelerate
-RUN pip install opencv-python pillow numpy
-RUN pip install runpod
+RUN pip install runpod opencv-python pillow torch torchvision diffusers transformers accelerate
 
 COPY handler.py .
 
